@@ -1,88 +1,123 @@
-# Race time tracker
+<div align="center">
 
-Predikce času doběhu na konkrétní trase pro support tým běžce.
+# 🏃‍♂️⏱️ Race Time Tracker
 
-## Živá aplikace
+**Predikce času doběhu na konkrétní trase — aby support tým věděl, v jakém čase běžce čekat na občerstvovačkách, checkpointech a v cíli.**
 
-Nasazená a dostupná online:
+[**▶ Živá aplikace**](https://race-tracker-frontend.onrender.com) · [Návod pro uživatele](NAVOD.md) · [Onboarding](ONBOARDING.md) · [Nasazení](DEPLOY.md)
 
-- **Aplikace:** https://race-tracker-frontend.onrender.com
-- **API:** https://race-tracker-backend.onrender.com
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-4169E1?logo=postgresql&logoColor=white)
+![Render](https://img.shields.io/badge/Deploy-Render-46E3B7?logo=render&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-Přihlášení je bez hesla (magic link na e-mail). Návod pro uživatele: [NAVOD.md](NAVOD.md),
-uvítací přehled: [ONBOARDING.md](ONBOARDING.md).
+</div>
 
-**Nasazení:** frontend + backend na [Render](https://render.com) (jeden `render.yaml`,
-free plan), databáze na [Neon](https://neon.tech) (cloud Postgres). Postup a proměnné
-viz [DEPLOY.md](DEPLOY.md). Push do `main` → automatické nasazení.
+---
+
+## Co to umí
+
+- 📈 Z **GPX trasy** spočítá výškový profil a rozdělí ji na úseky po ~100 m.
+- ⏱️ Odhadne **čas průchodu každým kilometrem** — v rozptylu (P10–P90), ne jen jedno číslo.
+- 🏔️ Zohlední **převýšení a sklon, postupnou únavu, počasí, běh za tmy a zastávky na občerstvovačkách**.
+- 🔗 Načte **historii běžce ze Stravy** a přizpůsobí predikci jeho reálné formě.
+- 📍 Za závodu sleduje **živou polohu z Garmin LiveTracku** a průběžně predikci zpřesňuje.
+- 👥 **Účty a sdílení** — každý vidí svoje závody, může pozvat support tým; přihlášení bez hesla (magic link).
+
+## Jak funguje predikce
+
+Trasa se rozseká na úseky po ~100 m; pro každý je znám sklon a nadmořská výška. Čas se
+počítá **Monte Carlo simulací** (tisíce běhů s navzorkovanými nejistotami), do níž vstupuje:
+
+| Vliv | Jak se promítá |
+|------|----------------|
+| **Sklon / převýšení** | Grade-adjusted pace podle Minettiho energetické náročnosti běhu; do kopce i prudký sběh zpomalují |
+| **Únava** | Multiplikativní faktor rostoucí s uběhnutou vzdáleností; koeficient se učí z historie a za závodu se upřesňuje |
+| **Počasí** | Předpověď z Open-Meteo pro daný úsek a čas — teplo, déšť/bláto, sníh, mlha |
+| **Tma** | Východ/západ slunce (`astral`) pro polohu a čas úseku → noční penalizace |
+| **Občerstvovačky** | Lognormální doba zastávky přičtená k času průchodu |
+| **Živě za závodu** | Garmin LiveTrack (poloha, tempo, tep, kadence) → bayesovská rekalibrace, kardiální drift; rozptyl se s časem zužuje |
+
+Z distribuce tisíců simulací vznikne pro každý bod **P10 / P50 / P90** — čas „od–do" spolu s mírou jistoty.
+
+## Architektura
+
+```mermaid
+flowchart LR
+    U["Support tým<br/>(prohlížeč)"] -->|REST + WebSocket| FE["Frontend<br/>Next.js"]
+    FE --> BE["Backend<br/>FastAPI"]
+    BE --> ENG["Predikční engine<br/>Monte Carlo"]
+    BE --> DB[("PostgreSQL<br/>Neon")]
+    GARMIN["Garmin LiveTrack"] -->|živá poloha, tep| BE
+    STRAVA["Strava API"] -->|historie, kalibrace| BE
+    METEO["Open-Meteo"] -->|počasí| BE
+```
 
 ## Technologický stack
 
 - **Frontend:** Next.js (React, TypeScript), grafy Recharts
-- **Backend:** Python + FastAPI; predikce = Monte Carlo simulace (Minetti GAP model, únava, počasí Open-Meteo, tma `astral`)
+- **Backend:** Python + FastAPI; predikce = Monte Carlo (Minetti GAP model, únava, počasí, tma `astral`); polling přes APScheduler
 - **Data běžce:** Garmin LiveTrack (živá poloha), Strava API (historie + osobní kalibrace)
 - **Databáze:** PostgreSQL (Neon)
-- **Auth:** magic link (bez hesla), JWT session, e-maily přes Gmail SMTP; přístup přes allowlist, admin sekce
-- **Hosting:** Render (backend + frontend), Neon (DB)
+- **Auth:** magic link (bez hesla), JWT session, e-maily přes Gmail SMTP; allowlist + admin sekce
+- **Hosting:** Render (backend + frontend), Neon (DB) — vše v cloudu 24/7
 
-## Struktura
-
-- `backend/` — FastAPI + predikční engine (Monte Carlo simulace), polling Garmin LiveTrack, Open-Meteo počasí, auth/allowlist/admin
-- `frontend/` — Next.js, výškový profil trasy s vyznačenými predikovanými časy (P10/P50/P90) a tabulka checkpointů
-- `docker-compose.yml` — PostgreSQL + Redis + backend + frontend (lokální varianta)
-
-## Rychlý start (vývoj, bez Dockeru)
+## Rychlý start (lokálně)
 
 Backend (Python 3.11+):
 
-```powershell
+```bash
 cd backend
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+python -m venv .venv && . .venv/Scripts/activate   # Windows: .venv\Scripts\Activate.ps1
 pip install -e .[dev]
 uvicorn app.main:app --reload --port 8000
 ```
 
-Bez `DATABASE_URL` se použije lokální SQLite (`backend/tracking.db`) — pro vývoj není potřeba nic dalšího.
+Bez `DATABASE_URL` se použije lokální SQLite — pro vývoj není potřeba nic dalšího.
+Konfigurace: viz [`backend/.env.example`](backend/.env.example).
 
 Frontend (Node 20+):
 
-```powershell
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Aplikace běží na http://localhost:3000, API na http://localhost:8000 (OpenAPI docs: http://localhost:8000/docs).
+Aplikace: http://localhost:3000 · API + OpenAPI docs: http://localhost:8000/docs
 
-## Typický workflow (API)
+Testy: `cd backend && pytest`
 
-Všechny endpointy (kromě `/auth/*` a `/health`) vyžadují přihlášení — hlavička
-`Authorization: Bearer <token>` z `/auth/verify`. Závod vidí jen jeho vlastník nebo
-pozvaný člen (`/races/{id}/members`).
+## Struktura projektu
 
-1. `POST /races` — založení závodu (název, datum startu)
-2. `POST /races/{id}/gpx` — upload GPX (multipart) → segmentace trasy po 100 m, vyhlazení výškového profilu
-3. `POST /races/{id}/aid-stations` — občerstvovačky (km + očekávaná délka zastávky)
-4. `POST /races/{id}/runners` — běžec: cílový čas, subjektivní pocit (1–5), Garmin LiveTrack URL
-5. `POST /runners/{id}/predict` — spuštění Monte Carlo simulace → časy průchodu po km s percentily
-6. Scheduler každých 30 s polluje LiveTrack, ukládá trackpointy (vč. tepu a kadence pro model),
-   rekalibruje parametry běžce a přepočítává predikci; frontend dostává update přes WebSocket.
-
-## Spuštění přes Docker
-
-```powershell
-docker compose up --build
+```
+backend/
+  app/
+    api/          # REST endpointy (races, runners, strava, auth, admin, ws)
+    auth/         # magic link, JWT, přístupová práva
+    services/
+      prediction/ # Monte Carlo engine, GAP model, únava
+      tracking/   # Garmin LiveTrack adaptér, mapování polohy na trasu
+      history/    # Strava klient + osobní kalibrace
+      route_service.py, weather.py, darkness.py
+    models.py, schemas.py, config.py, migrations.py
+  tests/
+frontend/
+  app/            # Next.js stránky (/, /login, /auth/verify, /admin)
+  components/     # profil trasy, tabulky, editory, sdílení
+  lib/api.ts      # API klient
+render.yaml       # nasazení (backend + frontend na Render)
 ```
 
-## Testy
+## Nasazení
 
-```powershell
-cd backend
-pytest
-```
+Frontend i backend běží na [Render](https://render.com) (jeden `render.yaml`, blueprint),
+databáze na [Neon](https://neon.tech). Push do `main` = automatické nasazení. Detailní
+postup a proměnné: [DEPLOY.md](DEPLOY.md).
 
-## Konfigurace
+## Licence
 
-Viz `backend/.env.example`. Klíčové proměnné: `DATABASE_URL`, `REDIS_URL`, `STRAVA_CLIENT_ID/SECRET`
-(historie běžce pro osobní kalibraci — volitelné).
+[MIT](LICENSE) © 2026 Jakub Tichý
