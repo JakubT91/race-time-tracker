@@ -1,0 +1,92 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #222;
+  background: #faf9f5;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-top: 32px;
+}
+
+section.card {
+  background: #fff;
+  border: 1px solid #e3e1d9;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+form.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 7px 10px;
+  border: 1px solid #ccc9bd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+button {
+  background: #534ab7;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+table.checkpoints {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+table.checkpoints th,
+table.checkpoints td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eceae2;
+}
+
+table.checkpoints th {
+  font-weight: 600;
+  color: #666;
+}
+
+.muted {
+  color: #777;
+  font-size: 13px;
+}
+
+.error {
+  color: #a32d2d;
+  font-size: 13px;
+}

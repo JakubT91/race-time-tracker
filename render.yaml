@@ -1,0 +1,72 @@
+# Render Blueprint: backend (FastAPI) i frontend (Next.js) na jednom místě.
+#
+# Render přečte tenhle soubor a vytvoří služby. Tajné hodnoty (DATABASE_URL,
+# Strava klíče) se nesynchronizují z gitu (sync: false) — zadáš je v dashboardu.
+services:
+  - type: web
+    name: race-tracker-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install .[postgres]
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      # Produkce: vypne vracení přihlašovacího odkazu v odpovědi (bezpečnost)
+      - key: DEV_MODE
+        value: "false"
+      # Kdo se smí přihlásit (allowlist, oddělené čárkou). Prázdné = kdokoli.
+      # Hodnota se zadává v Render dashboardu (aby e-maily nebyly ve veřejném kódu).
+      - key: ALLOWED_EMAILS
+        sync: false
+      # Administrátoři (vidí admin sekci) — hodnota v dashboardu
+      - key: ADMIN_EMAILS
+        sync: false
+      # Podpis přihlašovacích tokenů — Render vygeneruje náhodný a stabilní
+      - key: SECRET_KEY
+        generateValue: true
+      # Neon connection string (stejný jako máš lokálně v backend/.env)
+      - key: DATABASE_URL
+        sync: false
+      # Odesílání přihlašovacích e-mailů přes Gmail (SMTP).
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      # Gmail adresa odesílatele — hodnota v dashboardu (aby nebyla ve veřejném kódu)
+      - key: SMTP_USER
+        sync: false
+      # Heslo aplikace z Google (NE běžné heslo) — zadáš v dashboardu
+      - key: SMTP_PASSWORD
+        sync: false
+      # Resend (alternativa; nechává se, kdyby ses vrátil k doméně)
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      # URL nasazeného frontendu (po jeho nasazení), kvůli CORS. Lze víc přes čárku.
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      # Veřejná URL tohoto backendu (doplníš po prvním nasazení, kvůli Strava callbacku)
+      - key: BACKEND_BASE_URL
+        sync: false
+      - key: STRAVA_CLIENT_ID
+        sync: false
+      - key: STRAVA_CLIENT_SECRET
+        sync: false
+
+  # Frontend (Next.js) jako Node služba
+  - type: web
+    name: race-tracker-frontend
+    runtime: node
+    rootDir: frontend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npx next start -H 0.0.0.0 -p $PORT
+    envVars:
+      # Adresa backendu (musí být k dispozici už při buildu — Next ji zapéká dovnitř)
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+backend/tracking.db
+backend/.env
+
+# Node
+node_modules/
+frontend/.next/
+frontend/out/
+
+# Misc
+.DS_Store
+*.log
+
+# Lokální nastavení editoru/agenta
+.claude/
