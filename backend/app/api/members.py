@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/races", tags=["sharing"])
 
 # Pozvánkový přihlašovací odkaz platí déle než běžný (pozvaný nemusí kliknout hned)
-INVITE_LINK_TTL_DAYS = 7
+INVITE_LINK_TTL_DAYS = 30
 
 
 def _runner_label(race: models.Race) -> str:
@@ -40,6 +40,9 @@ class MemberOut(BaseModel):
     user_id: int
     email: str
     role: str
+    # Přihlašovací odkaz — vrací se jen při pozvání, ať ho vlastník může poslat
+    # kamarádovi (např. přes WhatsApp), když nechodí e-maily.
+    login_link: str | None = None
 
 
 def _normalize(email: str) -> str:
@@ -108,7 +111,8 @@ async def invite_member(
     except Exception:
         log.exception("Odeslání pozvánky selhalo pro %s", invitee.email)
 
-    return MemberOut(user_id=invitee.id, email=invitee.email, role="member")
+    # Odkaz vracíme i vlastníkovi, ať ho může poslat sám (nezávisle na e-mailu)
+    return MemberOut(user_id=invitee.id, email=invitee.email, role="member", login_link=link)
 
 
 @router.delete("/{race_id}/members/{user_id}", status_code=204)

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Autentizace (magic link)
     # podpis session JWT; v produkci nastav náhodný (Render ho vygeneruje sám)
     secret_key: str = "dev-insecure-change-me-please-set-a-real-32B-secret"
-    session_ttl_days: int = 30
+    session_ttl_days: int = 180  # po přihlášení zůstává uživatel přihlášený ~6 měsíců
     magic_link_ttl_min: int = 30
     # Odesílání e-mailů přes Resend (https://resend.com). Bez klíče se odkaz vypíše
     # do konzole a vrátí v odpovědi (jen pro vývoj) — v produkci klíč nastav.

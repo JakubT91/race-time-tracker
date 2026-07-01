@@ -90,6 +90,7 @@ export interface Member {
   user_id: number;
   email: string;
   role: string;
+  login_link?: string | null;
 }
 
 export interface Percentiles {

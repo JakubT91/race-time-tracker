@@ -8,6 +8,8 @@ export default function RaceMembersEditor({ raceId }: { raceId: number }) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<{ email: string; link: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   function reload() {
     api
@@ -26,15 +28,29 @@ export default function RaceMembersEditor({ raceId }: { raceId: number }) {
     e.preventDefault();
     setBusy(true);
     setMessage(null);
+    setCopied(false);
     try {
-      await api.inviteMember(raceId, email.trim());
+      const invited = email.trim();
+      const m = await api.inviteMember(raceId, invited);
       setEmail("");
-      setMessage("Pozvánka odeslána e-mailem. Až klikne na odkaz, přihlásí se a uvidí tenhle závod.");
+      setMessage("Pozváno. E-mail se pokusil odeslat — ale nejjistější je poslat kamarádovi tento odkaz sám (WhatsApp, Messenger…):");
+      setInviteLink(m.login_link ? { email: invited, link: m.login_link } : null);
       reload();
     } catch (err) {
       setMessage(`Pozvání selhalo: ${String(err)}`);
+      setInviteLink(null);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function copyLink() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink.link);
+      setCopied(true);
+    } catch {
+      setCopied(false);
     }
   }
 
@@ -75,6 +91,14 @@ export default function RaceMembersEditor({ raceId }: { raceId: number }) {
         </tbody>
       </table>
       {message && <p className="muted">{message}</p>}
+      {inviteLink && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input readOnly value={inviteLink.link} onFocus={(e) => e.target.select()} style={{ minWidth: 320, flex: 1 }} />
+          <button type="button" onClick={copyLink}>
+            {copied ? "Zkopírováno ✓" : "Kopírovat odkaz"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
