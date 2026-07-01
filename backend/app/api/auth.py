@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import models
-from app.auth.deps import get_current_user
+from app.auth.deps import email_has_access, get_current_user
 from app.auth.email import send_magic_link
 from app.auth.security import create_session_token, generate_magic_token, hash_token
 from app.config import settings
@@ -53,7 +53,7 @@ async def request_link(payload: AuthRequest, db: Session = Depends(get_db)):
     email = _normalize(payload.email)
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(422, "Zadej platný e-mail")
-    if not settings.is_email_allowed(email):
+    if not email_has_access(email, db):
         raise HTTPException(403, "Tento e-mail nemá přístup do aplikace. Požádej správce o přidání.")
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None:

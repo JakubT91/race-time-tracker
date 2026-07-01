@@ -1,14 +1,35 @@
 """Sdílení závodu — vlastník zve další uživatele (support tým)."""
 
+import logging
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import models
 from app.auth.deps import get_current_user, require_owned_race, require_race
+from app.auth.email import send_invite
+from app.auth.security import generate_magic_token
+from app.config import settings
 from app.db import get_db
+from app.models import utcnow
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/races", tags=["sharing"])
+
+# Pozvánkový přihlašovací odkaz platí déle než běžný (pozvaný nemusí kliknout hned)
+INVITE_LINK_TTL_DAYS = 7
+
+
+def _runner_label(race: models.Race) -> str:
+    names = [r.name for r in race.runners]
+    if not names:
+        return "tohoto závodu"
+    if len(names) == 1:
+        return f"běžce {names[0]}"
+    return "běžců " + ", ".join(names)
 
 
 class InviteRequest(BaseModel):
@@ -42,7 +63,7 @@ def list_members(race_id: int, db: Session = Depends(get_db), user: models.User 
 
 
 @router.post("/{race_id}/members", response_model=MemberOut)
-def invite_member(
+async def invite_member(
     race_id: int,
     payload: InviteRequest,
     db: Session = Depends(get_db),
@@ -69,9 +90,24 @@ def invite_member(
     )
     if existing is None:
         db.add(models.RaceMember(race_id=race.id, user_id=invitee.id))
-        db.commit()
+        db.commit()  # členství = pozvaný má přístup a smí se přihlásit (viz email_has_access)
 
-    # Pozvaný se přihlásí běžně přes magic link (na svůj e-mail) a závod uvidí.
+    # Přihlašovací odkaz přímo do e-mailu pozvánky, ať stačí kliknout
+    raw, token_hash = generate_magic_token()
+    db.add(
+        models.MagicLinkToken(
+            user_id=invitee.id,
+            token_hash=token_hash,
+            expires_at=utcnow() + timedelta(days=INVITE_LINK_TTL_DAYS),
+        )
+    )
+    db.commit()
+    link = f"{settings.public_app_url.rstrip('/')}/auth/verify?token={raw}"
+    try:
+        await send_invite(invitee.email, link, race.name, _runner_label(race))
+    except Exception:
+        log.exception("Odeslání pozvánky selhalo pro %s", invitee.email)
+
     return MemberOut(user_id=invitee.id, email=invitee.email, role="member")
 
 

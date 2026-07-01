@@ -9,6 +9,19 @@ from app.config import settings
 from app.db import get_db
 
 
+def email_has_access(email: str, db: Session) -> bool:
+    """Smí se přihlásit: je na statickém allowlistu, NEBO byl pozván (je členem
+    či vlastníkem nějakého závodu). Pozvání tak automaticky otevře přístup."""
+    if settings.is_email_allowed(email):
+        return True
+    user = db.query(models.User).filter(models.User.email == email.strip().lower()).first()
+    if user is None:
+        return False
+    owns = db.query(models.Race.id).filter(models.Race.owner_id == user.id).first() is not None
+    member = db.query(models.RaceMember.id).filter(models.RaceMember.user_id == user.id).first() is not None
+    return owns or member
+
+
 def get_current_user(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -22,7 +35,7 @@ def get_current_user(
     user = db.get(models.User, user_id)
     if user is None:
         raise HTTPException(401, "Uživatel neexistuje")
-    if not settings.is_email_allowed(user.email):
+    if not email_has_access(user.email, db):
         raise HTTPException(403, "Tvůj přístup byl odebrán.")
     return user
 

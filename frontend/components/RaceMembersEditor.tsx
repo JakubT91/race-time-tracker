@@ -29,7 +29,7 @@ export default function RaceMembersEditor({ raceId }: { raceId: number }) {
     try {
       await api.inviteMember(raceId, email.trim());
       setEmail("");
-      setMessage("Pozváno. Člen se přihlásí na svůj e-mail a uvidí tenhle závod.");
+      setMessage("Pozvánka odeslána e-mailem. Až klikne na odkaz, přihlásí se a uvidí tenhle závod.");
       reload();
     } catch (err) {
       setMessage(`Pozvání selhalo: ${String(err)}`);

@@ -15,6 +15,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TMP.as_posix()}"
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["RESEND_API_KEY"] = ""  # bez e-mailu -> dev_magic_link v odpovědi
 os.environ["ADMIN_EMAILS"] = "alice@example.com"  # alice je admin, bob ne
+os.environ["ALLOWED_EMAILS"] = "alice@example.com,bob@example.com"  # carol NENÍ na allowlistu
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -75,6 +76,14 @@ def main_check() -> int:
         members = c.get(f"/races/{race_id}/members", headers=h(alice)).json()
         roles = {m["email"]: m["role"] for m in members}
         assert roles == {"alice@example.com": "owner", "bob@example.com": "member"}, roles
+
+        # Pozvání dává přístup i mimo allowlist:
+        # carol není povolená -> nesmí se přihlásit
+        assert c.post("/auth/request", json={"email": "carol@example.com"}).status_code == 403
+        # alice ji pozve k závodu -> teď se smí přihlásit a vidí ho
+        assert c.post(f"/races/{race_id}/members", json={"email": "carol@example.com"}, headers=h(alice)).status_code == 200
+        carol = login(c, "carol@example.com")
+        assert [x["id"] for x in c.get("/races", headers=h(carol)).json()] == [race_id]
 
         # Alice (vlastník) smaže
         assert c.delete(f"/races/{race_id}", headers=h(alice)).status_code == 204

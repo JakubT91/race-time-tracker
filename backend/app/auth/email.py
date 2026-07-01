@@ -1,6 +1,6 @@
-"""Odesílání magic-link e-mailu.
+"""Odesílání e-mailů (přihlašovací odkaz, pozvánky).
 
-Priorita: SMTP (např. Gmail) -> Resend -> jen log (vývoj).
+Priorita transportu: SMTP (např. Gmail) -> Resend -> jen log (vývoj).
 Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=<gmail>,
 SMTP_PASSWORD=<app password> (heslo aplikace, ne běžné heslo).
 """
@@ -19,20 +19,9 @@ log = logging.getLogger(__name__)
 RESEND_URL = "https://api.resend.com/emails"
 
 
-def _build_html(link: str) -> str:
-    return (
-        f"<p>Ahoj,</p><p>klikni pro přihlášení do Race tracker:</p>"
-        f'<p><a href="{link}">Přihlásit se</a></p>'
-        f"<p>Odkaz platí omezenou dobu. Pokud jsi o přihlášení nežádal, ignoruj tento e-mail.</p>"
-    )
-
-
-async def send_magic_link(email: str, link: str) -> None:
-    subject = "Přihlášení do Race tracker"
-    html = _build_html(link)
-
+async def _send(to: str, subject: str, html: str, text: str) -> None:
     if settings.smtp_host and settings.smtp_user and settings.smtp_password:
-        await asyncio.to_thread(_send_smtp, email, subject, html, link)
+        await asyncio.to_thread(_send_smtp, to, subject, html, text)
         return
 
     if settings.resend_api_key:
@@ -40,21 +29,21 @@ async def send_magic_link(email: str, link: str) -> None:
             resp = await client.post(
                 RESEND_URL,
                 headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-                json={"from": settings.mail_from, "to": [email], "subject": subject, "html": html},
+                json={"from": settings.mail_from, "to": [to], "subject": subject, "html": html},
             )
             resp.raise_for_status()
         return
 
-    log.warning("Žádná e-mailová služba nenastavena — magic link pro %s: %s", email, link)
+    log.warning("Žádná e-mailová služba nenastavena — [%s] pro %s: %s", subject, to, text)
 
 
-def _send_smtp(to: str, subject: str, html: str, link: str) -> None:
+def _send_smtp(to: str, subject: str, html: str, text: str) -> None:
     msg = EmailMessage()
     msg["Subject"] = subject
     # Gmail vyžaduje From = ověřený odesílatel (přihlášený účet)
     msg["From"] = f"Race tracker <{settings.smtp_user}>"
     msg["To"] = to
-    msg.set_content(f"Přihlas se do Race tracker tímto odkazem:\n{link}")
+    msg.set_content(text)
     msg.add_alternative(html, subtype="html")
 
     if settings.smtp_port == 465:
@@ -66,3 +55,25 @@ def _send_smtp(to: str, subject: str, html: str, link: str) -> None:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(msg)
+
+
+async def send_magic_link(email: str, link: str) -> None:
+    html = (
+        f"<p>Ahoj,</p><p>klikni pro přihlášení do Race tracker:</p>"
+        f'<p><a href="{link}">Přihlásit se</a></p>'
+        f"<p>Odkaz platí omezenou dobu. Pokud jsi o přihlášení nežádal, ignoruj tento e-mail.</p>"
+    )
+    await _send(email, "Přihlášení do Race tracker", html, f"Přihlas se do Race tracker: {link}")
+
+
+async def send_invite(email: str, link: str, race_name: str, runner_label: str) -> None:
+    subject = f"Pozvánka do Race tracker — {race_name}"
+    html = (
+        f"<p>Ahoj,</p>"
+        f"<p>byl jsi pozván ke sledování {runner_label} na závodě <strong>{race_name}</strong> "
+        f"v aplikaci Race tracker.</p>"
+        f'<p><a href="{link}">Otevřít závod a přihlásit se</a></p>'
+        f"<p>Stačí kliknout — přihlášení je bez hesla.</p>"
+    )
+    text = f"Byl jsi pozván ke sledování {runner_label} na závodě {race_name}. Přihlas se: {link}"
+    await _send(email, subject, html, text)
