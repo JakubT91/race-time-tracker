@@ -1,5 +1,6 @@
 """Admin sekce (jen pro administrátory) — přehled uživatelů a závodů."""
 
+import smtplib
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
@@ -8,9 +9,41 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.auth.deps import require_admin
+from app.config import settings
 from app.db import get_db
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+
+@router.get("/mail-test")
+def mail_test():
+    """Diagnostika odesílání e-mailů — jaký transport a jestli SMTP spojení + login projde."""
+    out = {
+        "smtp_host": settings.smtp_host or "(prázdné)",
+        "smtp_port": settings.smtp_port,
+        "smtp_user_set": bool(settings.smtp_user),
+        "smtp_password_set": bool(settings.smtp_password),
+        "resend_set": bool(settings.resend_api_key),
+    }
+    if settings.smtp_host and settings.smtp_user and settings.smtp_password:
+        out["transport"] = "smtp (Gmail)"
+        try:
+            if settings.smtp_port == 465:
+                srv = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15)
+            else:
+                srv = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15)
+                srv.starttls()
+            srv.login(settings.smtp_user, settings.smtp_password)
+            srv.quit()
+            out["smtp_ok"] = True
+        except Exception as exc:  # noqa: BLE001
+            out["smtp_ok"] = False
+            out["smtp_error"] = f"{type(exc).__name__}: {exc}"
+    elif settings.resend_api_key:
+        out["transport"] = "resend"
+    else:
+        out["transport"] = "žádný (jen log)"
+    return out
 
 
 def _iso(dt: datetime | None) -> str | None:
