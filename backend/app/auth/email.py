@@ -20,9 +20,16 @@ RESEND_URL = "https://api.resend.com/emails"
 
 
 async def _send(to: str, subject: str, html: str, text: str) -> None:
+    # SMTP (Gmail) funguje lokálně, ale hostingy jako Render zdarma blokují odchozí
+    # SMTP. Když selže a je k dispozici Resend, spadneme na něj (jede přes HTTPS).
     if settings.smtp_host and settings.smtp_user and settings.smtp_password:
-        await asyncio.to_thread(_send_smtp, to, subject, html, text)
-        return
+        try:
+            await asyncio.to_thread(_send_smtp, to, subject, html, text)
+            return
+        except Exception as exc:  # noqa: BLE001
+            if not settings.resend_api_key:
+                raise
+            log.warning("SMTP selhalo (%s: %s) — padám na Resend", type(exc).__name__, exc)
 
     if settings.resend_api_key:
         async with httpx.AsyncClient(timeout=15) as client:
